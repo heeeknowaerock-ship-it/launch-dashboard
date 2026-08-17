@@ -1,100 +1,34 @@
-# 론칭 타래 대시보드
-
-Teams 론칭 타래를 상태 기반 일정 관리 표로 바꾸는 대시보드입니다. 빌드 과정 없이 `index.html` 하나로 동작합니다.
-
-## GitHub Pages로 배포하기
-
-1. 이 폴더(`index.html`, `README.md`)를 새 GitHub 저장소에 올립니다.
-   ```bash
-   git init
-   git add .
-   git commit -m "launch dashboard"
-   git branch -M main
-   git remote add origin <레포 주소>
-   git push -u origin main
-   ```
-2. 저장소 **Settings → Pages** 로 이동합니다.
-3. **Source**를 `Deploy from a branch`로 설정하고, 브랜치는 `main`, 폴더는 `/ (root)`로 지정합니다.
-4. 잠시 뒤 `https://<계정>.github.io/<레포이름>/` 주소로 접속하면 대시보드가 뜹니다.
-
-Netlify나 Vercel에 올리는 경우도 동일합니다 — 빌드 명령어 없이 `index.html`을 그대로 정적 파일로 배포하면 됩니다.
-
-## 지금 상태 (이번 해커톤 기준)
-
-- 작품 목록 표, 상태 자동 계산(서지/원고/표지/등록/승인/완료), 마감일 자동 계산(영업일 7일 전), 마감 임박 강조 → **완료**
-- 데이터는 브라우저 `localStorage`에만 저장됩니다. 새로고침해도 유지되지만, **다른 사람 브라우저와는 공유되지 않습니다.**
-- Teams 자동 알림 → **미구현** (다음 단계)
-- Teams 연동 → **읽기 전용 화면만 구현**, 실제 데이터 연동은 안 됨
-
-## 다음 단계 1: 팀 전체가 같이 보게 하려면
-
-지금은 각자 브라우저에만 데이터가 저장됩니다. 여러 사람이 같은 데이터를 보게 하려면 아래 중 하나가 필요합니다.
-
-- 가장 간단: **Supabase** 같은 무료 백엔드에 표를 하나 만들고, `fetch`로 읽고 쓰기
-- 이미 쓰는 도구가 있다면: **Notion API**, **Google Sheets API**로 대체
-- 자체 서버가 있다면: 작은 REST API 하나 붙이기
-
-## 다음 단계 2: Teams 연동을 실제로 붙이려면
-
-지금 화면의 "Teams 현황 불러오기" 버튼은 **의도적으로 막혀 있습니다.** 이유는 두 가지입니다.
-
-1. **CORS** — 브라우저는 `graph.microsoft.com`에 직접 요청을 보낼 수 없습니다.
-2. **보안** — Client Secret을 브라우저 JS에 넣으면 개발자도구만 열어도 누구나 그 값을 볼 수 있습니다. 절대 배포용 코드에 Secret을 하드코딩하지 마세요.
-
-그래서 실제 연동은 **작은 백엔드(서버리스 함수) 하나**를 거쳐야 합니다. 흐름은 이렇게 됩니다.
-
-```
-브라우저 (index.html) → 내 서버리스 함수 → Microsoft Graph API
-```
-
-Vercel이나 Netlify를 쓴다면 아래처럼 API 라우트 하나만 추가하면 됩니다 (Vercel 예시, `/api/teams-sync.js`):
-
-```js
-export default async function handler(req, res) {
-  const { tenantId, clientId, clientSecret, teamId, channelId, top } = req.body;
-
-  const tokenRes = await fetch(
-    `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        scope: "https://graph.microsoft.com/.default",
-        grant_type: "client_credentials",
-      }),
-    }
-  );
-  const { access_token } = await tokenRes.json();
-
-  const msgRes = await fetch(
-    `https://graph.microsoft.com/v1.0/teams/${teamId}/channels/${channelId}/messages?$top=${top || 50}`,
-    { headers: { Authorization: `Bearer ${access_token}` } }
-  );
-  const data = await msgRes.json();
-  res.status(200).json(data);
-}
-```
-
-그리고 `index.html`의 `handleSync()` 함수에서 `throw new Error(...)` 부분을 아래처럼 바꾸면 됩니다.
-
-```js
-const resp = await fetch('/api/teams-sync', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ tenantId, clientId, clientSecret, teamId, channelId, top: fetchCount }),
-});
-const data = await resp.json();
-// data.value 안의 메시지를 파싱해서 items 배열에 반영
-```
-
-Client Secret은 이 서버리스 함수 안에서만 쓰고, 환경변수(예: Vercel의 Environment Variables)에 저장하세요 — 브라우저로는 절대 보내지 않습니다.
-
-### Entra ID 앱 등록에 필요한 권한
-
-- API 권한(애플리케이션 권한, 관리자 동의 필요): `ChannelMessage.Read.All`, `Team.ReadBasic.All`, `Channel.ReadBasic.All`
-
-## 다음 단계 3: 자동 알림
-
-마감 3일 전, 미완료 건에 대해 Teams로 알림을 보내려면, 위에서 만든 서버리스 함수를 하나 더 추가해서 **정기적으로(cron) 실행**하고, Teams의 [Incoming Webhook](https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook) 또는 Graph의 `chatMessage` 전송 API로 알림을 발송하면 됩니다. Vercel Cron, GitHub Actions 스케줄, 또는 별도 서버의 cron 중 편한 방식을 고르시면 됩니다.
+론칭 타래 대시보드
+Teams 론칭 타래를 상태 기반 일정 관리 표로 바꾸는 대시보드입니다. `index.html` + `api/teams-sync.js` 두 부분으로 구성되어 있고, Vercel에 배포하면 바로 동작합니다.
+배포 (Vercel)
+이 폴더 전체(`index.html`, `api/teams-sync.js`, `README.md`)를 GitHub 저장소에 올립니다.
+vercel.com → Add New → Project → 해당 저장소 Import → Deploy
+배포된 프로젝트 → Settings → Environment Variables 에 아래 3개 추가 후 Redeploy:
+Name	값
+`TEAMS_TENANT_ID`	Microsoft Entra tenant ID
+`TEAMS_CLIENT_ID`	앱 등록 client ID
+`TEAMS_CLIENT_SECRET`	앱 등록 client secret
+Client Secret은 절대 index.html이나 브라우저 입력창에 넣지 않습니다. 서버 환경변수에만 저장되고, `api/teams-sync.js` 안에서만 사용됩니다.
+사용 방법
+페이지 상단 "Teams 읽기 전용 연동" 카드에 Team ID, Channel ID를 입력
+"Teams 현황 불러오기" 클릭
+`api/teams-sync.js`가 서버에서 Microsoft Graph를 호출해 채널의 최근 메시지를 가져오고, 각 메시지 본문에서 다음 라벨을 정규식으로 추출합니다:
+`작품명`, `작가명`, `레이블 태그`(또는 `레이블`), `구분(연재/단행)`, `출간 플랫폼`, `출간 일정`
+추출된 값으로 작품 카드가 자동으로 추가/갱신됩니다. 이미 있는 작품(제목이 같은 항목)은 새로 만들지 않고 갱신만 됩니다.
+메시지에 👍(thumbsup/like) 반응이 있으면 완료 처리로 반영됩니다.
+Team ID / Channel ID 구하는 법
+Teams에서 대상 팀 → "..." → 팀 링크 가져오기 → URL의 `groupId=` 뒤 값이 Team ID
+대상 채널 → "..." → 채널 링크 가져오기 → URL 안의 `19%3a`로 시작하는 인코딩 값이 Channel ID
+Entra ID 앱에 필요한 권한
+애플리케이션 권한(위임된 권한 아님) + 관리자 동의 필요:
+`ChannelMessage.Read.All`
+`Team.ReadBasic.All`
+`Channel.ReadBasic.All`
+알아두어야 할 것
+본문 파싱 규칙이 우리 팀 타래 양식에 맞게 되어 있는지 먼저 테스트하세요. `api/teams-sync.js`의 `parseLaunchFields` 함수가 찾는 라벨 문구가 실제 타래에서 쓰는 표현과 다르면 못 읽어옵니다. 필요하면 라벨 목록(`extractField`에 넘기는 배열)에 실제 쓰는 표현을 추가하세요.
+👍 반응 감지는 Graph API 응답 구조에 따라 조정이 필요할 수 있습니다. `reactions` 필드가 기대한 형태로 오지 않으면, 서버 함수에서 한 번 `console.log(msgData)`로 실제 응답 구조를 확인한 뒤 `hasThumbsUp` 판정 로직을 맞춰야 합니다.
+이 페이지는 로그인 보호가 없습니다. URL을 아는 사람은 누구나 동기화 버튼을 누를 수 있어요. 사내 전용으로만 쓰실 거라면 Vercel의 Password Protection 기능(Pro 플랜)이나 간단한 접근 코드 체크를 추가하는 걸 권장합니다.
+작품별 체크박스 상태(서지/원고/표지/제작/등록/승인/완료)는 Teams에 없는 정보라 여전히 대시보드에서 직접 체크해야 합니다. Teams 동기화는 작품 기본 정보(제목/작가/레이블/플랫폼)를 채워주는 역할만 합니다.
+데이터는 브라우저 `localStorage`에 저장됩니다. 팀 전체가 같은 데이터를 보게 하려면 Supabase 같은 DB를 붙여 `items` 배열을 서버에 저장하도록 바꿔야 합니다 (다음 단계 과제).
+다음 단계: 자동 알림
+마감 3일 전 미완료 건에 대해 자동 알림을 보내려면, `api/teams-sync.js`처럼 함수를 하나 더 만들어 Vercel Cron으로 주기 실행하고, Teams Incoming Webhook으로 메시지를 보내면 됩니다.
