@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>론칭 타래 대시보드</title>
+<style>
+  :root{
+    --bg: #EEF1F8;
+    --card: #FFFFFF;
+    --border: #E3E7EF;
+    --text-primary: #1B1F2A;
+    --text-secondary: #6B7280;
+    --text-muted: #9CA3AF;
+    --accent: #2F5BEB;
+    --accent-dark: #1E42B8;
+    --amber-bg:#FEF3C7; --amber-text:#92400E;
+    --blue-bg:#DBEAFE; --blue-text:#1D4ED8;
+    --purple-bg:#E0E7FF; --purple-text:#3730A3;
+    --green-bg:#D1FAE5; --green-text:#047857;
+    --gray-bg:#F1F5F9; --gray-text:#64748B;
+    --red-bg:#FFE4E6; --red-text:#BE123C;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI","Malgun Gothic",sans-serif;
+    background:var(--bg);
+    color:var(--text-primary);
+    padding:32px 24px 80px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px;}
+  .sub{color:var(--text-secondary);font-size:14px;margin:0 0 24px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:20px;}
+  .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+  .card-head h2{font-size:15px;font-weight:600;margin:0 0 2px;}
+  .card-head p{font-size:13px;color:var(--text-secondary);margin:0;}
+  .pill{font-size:12px;padding:4px 10px;border-radius:8px;white-space:nowrap;font-weight:500;}
+  .pill.gray{background:var(--gray-bg);color:var(--gray-text);}
+  .pill.red{background:var(--red-bg);color:var(--red-text);}
+  .pill.green{background:var(--green-bg);color:var(--green-text);}
+  .pill.pillAmber{background:var(--amber-bg);color:var(--amber-text);}
+  .pill.pillBlue{background:var(--blue-bg);color:var(--blue-text);}
+  .pill.pillPurple{background:var(--purple-bg);color:var(--purple-text);}
+  .grid-4{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
+  label.field{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--text-secondary);}
+  input, select{
+    font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;
+    background:#fff;color:var(--text-primary);font-family:inherit;
+  }
+  input:focus, select:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent);}
+  button{
+    font-family:inherit;font-size:13px;font-weight:500;border-radius:8px;border:1px solid var(--border);
+    padding:9px 14px;background:#fff;color:var(--text-primary);cursor:pointer;
+  }
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent-dark);}
+  button.primary:hover{background:var(--accent-dark);}
+  button.ghost{background:transparent;border-color:transparent;color:var(--text-secondary);}
+  button.ghost:hover{color:var(--red-text);}
+  .sync-row{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;}
+  .sync-note{font-size:12px;color:var(--text-muted);}
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
+  .metric{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;}
+  .metric .label{font-size:12px;color:var(--text-secondary);margin-bottom:6px;}
+  .metric .value{font-size:26px;font-weight:600;}
+  .filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  .filters select, .filters input{flex:1;min-width:140px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;font-size:12px;color:var(--text-secondary);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  td{padding:10px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  .title-cell .t{font-weight:600;font-size:14px;}
+  .title-cell .s{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+  .title-cell input{font-weight:600;font-size:13px;width:100%;margin-bottom:4px;}
+  .title-cell .meta-row{display:flex;gap:4px;}
+  .title-cell .meta-row input{font-size:12px;color:var(--text-secondary);width:33%;}
+  .date-cell input{width:130px;}
+  .date-cell .meta{font-size:12px;color:var(--text-secondary);margin-top:4px;}
+  .remain{font-weight:600;}
+  .remain.danger{color:var(--red-text);}
+  .stage-wrap{display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
+  .check-group{display:flex;flex-direction:column;gap:4px;min-width:110px;}
+  .check-group label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;}
+  .check-group input{margin:0;width:14px;height:14px;}
+  .table-wrap{overflow-x:auto;}
+  footer{text-align:center;font-size:12px;color:var(--text-muted);margin-top:32px;}
+  @media (max-width: 900px){
+    table, thead, tbody, th, td, tr { display:block; }
+    thead{display:none;}
+    tr{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;padding:10px;}
+    td{border-bottom:none;padding:6px 4px;}
+    td::before{content:attr(data-label);display:block;font-size:11px;color:var(--text-muted);margin-bottom:3px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>론칭 타래 대시보드</h1>
+  <p class="sub">서지·원고·표지 준비 상태를 기준으로 작품별 진행 단계를 자동으로 계산합니다.</p>
+
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>Teams 읽기 전용 연동</h2>
+        <p>Microsoft Graph 앱 정보를 입력하고 동기화하면 채널의 최근 타래를 읽어옵니다.</p>
+      </div>
+      <span class="pill red" id="teamsStatusPill">연결 안됨</span>
+    </div>
+    <div class="grid-4">
+      <label class="field">Tenant ID
+        <input id="tenantId" placeholder="Microsoft Entra tenant ID">
+      </label>
+      <label class="field">Client ID
+        <input id="clientId" placeholder="앱 등록 client ID">
+      </label>
+      <label class="field">Client Secret
+        <input id="clientSecret" type="password" placeholder="이번 실행에서만 사용">
+      </label>
+      <label class="field">Team ID
+        <input id="teamId" placeholder="Teams 팀 ID">
+      </label>
+      <label class="field">Channel ID
+        <input id="channelId" placeholder="론칭 타래가 있는 채널 ID">
+      </label>
+      <label class="field">조회 개수
+        <input id="fetchCount" type="number" value="50">
+      </label>
+    </div>
+    <div class="sync-row">
+      <button class="primary" onclick="handleSync()">Teams 현황 불러오기</button>
+      <span class="sync-note" id="syncNote">브라우저에서 직접 호출 시 CORS와 시크릿 노출 문제로 막힙니다 — 아래 README의 서버리스 프록시 안내를 참고하세요.</span>
+    </div>
+  </div>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>작품 일정 관리 표</h2>
+        <p>체크박스를 바꾸면 현재 단계와 리마인드 대상이 즉시 다시 계산됩니다.</p>
+      </div>
+      <button onclick="addItem()">+ 작품 추가</button>
+    </div>
+    <div class="filters">
+      <select id="fLabel" onchange="render()"></select>
+      <select id="fStatus" onchange="render()">
+        <option>전체</option><option>완료</option><option>미완료</option><option>마감임박</option>
+      </select>
+      <input id="fSearch" placeholder="작품명·작가 검색" oninput="render()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>작품</th><th>일정</th><th>현재 단계</th><th>준비 체크</th><th>마감 체크</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>데이터는 이 브라우저의 localStorage에만 저장됩니다. 팀 전체 공유가 필요하면 백엔드/DB 연결이 필요합니다.</footer>
+</div>
+
+<script>
+const STORAGE_KEY = 'launch-dashboard-items-v1';
+const CONFIG_KEY = 'launch-dashboard-teams-config-v1';
+
+function seedItems(){
+  return [
+    {id:1, title:'새벽 끝의 로맨스', author:'에일', label:'조이', kind:'연재 · 카카오페이지', pubDate:addDays(new Date(),9).toISOString().slice(0,10), threadUrl:'',
+     biblio:true, manuscript:false, cover:true, produce:false, registered:false, approving:false, done:false},
+    {id:2, title:'검은 봉인의 귀환', author:'윈디드', label:'라토', kind:'단행 · 리디', pubDate:addDays(new Date(),7).toISOString().slice(0,10), threadUrl:'',
+     biblio:true, manuscript:true, cover:true, produce:true, registered:true, approving:true, done:false},
+  ];
+}
+
+function addDays(d,n){ const c=new Date(d); c.setDate(c.getDate()+n); return c; }
+function addBizDays(date, n){
+  let d=new Date(date); const dir=n<0?-1:1; let left=Math.abs(n);
+  while(left>0){ d.setDate(d.getDate()+dir); if(d.getDay()!==0 && d.getDay()!==6) left--; }
+  return d;
+}
+function bizDaysBetween(a,b){
+  let d=new Date(a); const dir=b>=a?1:-1; let c=0;
+  const target=new Date(b);
+  while(d.toDateString()!==target.toDateString()){
+    d.setDate(d.getDate()+dir);
+    if(d.getDay()!==0 && d.getDay()!==6) c+=dir;
+    if(Math.abs(c)>400) break;
+  }
+  return c;
+}
+function fmt(d){ return d.toISOString().slice(0,10); }
+
+function loadItems(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return seedItems();
+}
+function saveItems(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
+
+function loadConfig(){
+  try{ return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}'); }catch(e){ return {}; }
+}
+function saveConfig(){
+  const cfg = {
+    tenantId: document.getElementById('tenantId').value,
+    clientId: document.getElementById('clientId').value,
+    teamId: document.getElementById('teamId').value,
+    channelId: document.getElementById('channelId').value,
+    fetchCount: document.getElementById('fetchCount').value,
+  };
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+}
+
+let items = loadItems();
+
+function stage(it){
+  if(it.done) return {label:'완료', cls:'green'};
+  if(it.approving) return {label:'승인 대기중', cls:'blue'};
+  if(it.registered) return {label:'등록 완료', cls:'blue'};
+  if(it.produce) return {label:'제작 진행중', cls:'purple'};
+  if(it.biblio && it.manuscript && it.cover) return {label:'제작 가능', cls:'purple'};
+  if(!it.pubDate) return {label:'일정 미확정', cls:'gray'};
+  if(!it.biblio) return {label:'서지정보 대기중', cls:'amber'};
+  if(!it.manuscript) return {label:'원고 대기중', cls:'amber'};
+  return {label:'표지 대기중', cls:'amber'};
+}
+
+function addItem(){
+  const id = items.length ? Math.max(...items.map(i=>i.id))+1 : 1;
+  items.push({id, title:'새 작품', author:'', label:'', kind:'', pubDate:fmt(addDays(new Date(),14)), threadUrl:'',
+    biblio:false, manuscript:false, cover:false, produce:false, registered:false, approving:false, done:false});
+  saveItems();
+  render();
+}
+function removeItem(id){
+  items = items.filter(i=>i.id!==id);
+  saveItems();
+  render();
+}
+function updateField(id, field, value){
+  const it = items.find(i=>i.id===id);
+  if(!it) return;
+  it[field] = value;
+  saveItems();
+  render();
+}
+
+async function handleSync(){
+  saveConfig();
+  const pill = document.getElementById('teamsStatusPill');
+  const note = document.getElementById('syncNote');
+  const tenant = document.getElementById('tenantId').value;
+  const client = document.getElementById('clientId').value;
+  if(!tenant || !client){
+    note.textContent = 'Tenant ID와 Client ID를 먼저 입력하세요.';
+    return;
+  }
+  pill.textContent = '연결 시도 중...';
+  pill.className = 'pill gray';
+  try{
+    // 실제 배포 시에는 이 부분을 서버리스 프록시(/api/teams-sync) 호출로 교체하세요.
+    // 브라우저에서 Client Secret으로 직접 Microsoft Graph를 호출하면 시크릿이 노출되고 CORS로 막힙니다.
+    throw new Error('직접 호출 불가 — 백엔드 프록시 필요');
+  }catch(e){
+    pill.textContent = '연결 안됨';
+    pill.className = 'pill red';
+    note.textContent = '아직 백엔드 프록시가 없어 브라우저에서 직접 동기화할 수 없습니다. README를 참고하세요.';
+  }
+}
+
+function populateFilters(){
+  const fLabel = document.getElementById('fLabel');
+  const current = fLabel.value;
+  const labels = ['전체', ...new Set(items.map(i=>i.label).filter(Boolean))];
+  fLabel.innerHTML = labels.map(l=>'<option'+(l===current?' selected':'')+'>'+l+'</option>').join('');
+}
+
+function render(){
+  populateFilters();
+  const fLabel = document.getElementById('fLabel').value || '전체';
+  const fStatus = document.getElementById('fStatus').value || '전체';
+  const fSearch = (document.getElementById('fSearch').value || '').trim().toLowerCase();
+
+  let overdue=0, manuscriptWait=0, coverWait=0, doneCount=0;
+  items.forEach(it=>{
+    if(!it.manuscript) manuscriptWait++;
+    if(!it.cover) coverWait++;
+    if(it.done) doneCount++;
+    if(it.pubDate){
+      const due = addBizDays(new Date(it.pubDate), -7);
+      const remain = bizDaysBetween(new Date(), due);
+      if(remain<=3 && !it.done) overdue++;
+    }
+  });
+  document.getElementById('summary').innerHTML = [
+    ['전체 작품', items.length],
+    ['마감 임박', overdue],
+    ['원고 대기', manuscriptWait],
+    ['표지 대기', coverWait],
+    ['완료', doneCount],
+  ].map(([l,v])=>'<div class="metric"><div class="label">'+l+'</div><div class="value">'+v+'</div></div>').join('');
+
+  const rows = document.getElementById('rows');
+  rows.innerHTML = '';
+  items.filter(it=>{
+    if(fLabel!=='전체' && it.label!==fLabel) return false;
+    if(fSearch && !(it.title.toLowerCase().includes(fSearch) || it.author.toLowerCase().includes(fSearch))) return false;
+    if(fStatus!=='전체'){
+      const due = it.pubDate ? addBizDays(new Date(it.pubDate), -7) : null;
+      const remain = due ? bizDaysBetween(new Date(), due) : null;
+      if(fStatus==='완료' && !it.done) return false;
+      if(fStatus==='미완료' && it.done) return false;
+      if(fStatus==='마감임박' && !(remain!==null && remain<=3 && !it.done)) return false;
+    }
+    return true;
+  }).forEach(it=>{
+    const st = stage(it);
+    const due = it.pubDate ? addBizDays(new Date(it.pubDate), -7) : null;
+    const remain = due ? bizDaysBetween(new Date(), due) : null;
+    const remind = remain!==null && remain<=3 && !it.done;
+    const tr = document.createElement('tr');
+
+    tr.innerHTML =
+      '<td data-label="작품" class="title-cell">'+
+        '<input value="'+esc(it.title)+'" onchange="updateField('+it.id+',&quot;title&quot;,this.value)">'+
+        '<div class="meta-row">'+
+          '<input value="'+esc(it.author)+'" placeholder="작가" onchange="updateField('+it.id+',&quot;author&quot;,this.value)">'+
+          '<input value="'+esc(it.label)+'" placeholder="레이블" onchange="updateField('+it.id+',&quot;label&quot;,this.value)">'+
+          '<input value="'+esc(it.kind)+'" placeholder="구분·플랫폼" onchange="updateField('+it.id+',&quot;kind&quot;,this.value)">'+
+        '</div>'+
+      '</td>'+
+      '<td data-label="일정" class="date-cell">'+
+        '<input type="date" value="'+it.pubDate+'" onchange="updateField('+it.id+',&quot;pubDate&quot;,this.value)">'+
+        (due ? '<div class="meta">마감 '+fmt(due)+' · <span class="remain'+(remain<0?' danger':'')+'">D'+(remain>=0?'-'+remain:'+'+Math.abs(remain))+'</span></div>' : '<div class="meta">일정 미확정</div>')+
+      '</td>'+
+      '<td data-label="현재 단계"><div class="stage-wrap">'+
+        '<span class="pill '+colorClass(st.cls)+'">'+st.label+'</span>'+
+        (remind ? '<span class="pill red">리마인드 필요</span>' : '')+
+      '</div></td>'+
+      '<td data-label="준비 체크"><div class="check-group">'+
+        checkbox(it.id,'biblio','서지',it.biblio)+
+        checkbox(it.id,'manuscript','원고',it.manuscript)+
+        checkbox(it.id,'cover','표지',it.cover)+
+      '</div></td>'+
+      '<td data-label="마감 체크"><div class="check-group">'+
+        checkbox(it.id,'produce','제작 시작',it.produce)+
+        checkbox(it.id,'registered','등록 완료',it.registered)+
+        checkbox(it.id,'approving','승인 대기',it.approving)+
+        checkbox(it.id,'done','완료',it.done)+
+      '</div></td>'+
+      '<td data-label=""><button class="ghost" onclick="removeItem('+it.id+')">삭제</button></td>';
+    rows.appendChild(tr);
+  });
+}
+
+function checkbox(id, field, label, checked){
+  return '<label><input type="checkbox" '+(checked?'checked':'')+' onchange="updateField('+id+',&quot;'+field+'&quot;,this.checked)">'+label+'</label>';
+}
+function colorClass(cls){
+  return {amber:'pillAmber', blue:'pillBlue', purple:'pillPurple', green:'green', gray:'gray'}[cls] || 'gray';
+}
+function esc(s){
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+(function init(){
+  const cfg = loadConfig();
+  if(cfg.tenantId) document.getElementById('tenantId').value = cfg.tenantId;
+  if(cfg.clientId) document.getElementById('clientId').value = cfg.clientId;
+  if(cfg.teamId) document.getElementById('teamId').value = cfg.teamId;
+  if(cfg.channelId) document.getElementById('channelId').value = cfg.channelId;
+  if(cfg.fetchCount) document.getElementById('fetchCount').value = cfg.fetchCount;
+  render();
+})();
+</script>
+</body>
+</html>
