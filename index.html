@@ -103,20 +103,11 @@
     <div class="card-head">
       <div>
         <h2>Teams 읽기 전용 연동</h2>
-        <p>Microsoft Graph 앱 정보를 입력하고 동기화하면 채널의 최근 타래를 읽어옵니다.</p>
+        <p>Tenant/Client 정보는 Vercel 환경변수에 저장되어 있습니다. 아래 두 값만 입력하면 됩니다.</p>
       </div>
       <span class="pill red" id="teamsStatusPill">연결 안됨</span>
     </div>
     <div class="grid-4">
-      <label class="field">Tenant ID
-        <input id="tenantId" placeholder="Microsoft Entra tenant ID">
-      </label>
-      <label class="field">Client ID
-        <input id="clientId" placeholder="앱 등록 client ID">
-      </label>
-      <label class="field">Client Secret
-        <input id="clientSecret" type="password" placeholder="이번 실행에서만 사용">
-      </label>
       <label class="field">Team ID
         <input id="teamId" placeholder="Teams 팀 ID">
       </label>
@@ -129,7 +120,7 @@
     </div>
     <div class="sync-row">
       <button class="primary" onclick="handleSync()">Teams 현황 불러오기</button>
-      <span class="sync-note" id="syncNote">브라우저에서 직접 호출 시 CORS와 시크릿 노출 문제로 막힙니다 — 아래 README의 서버리스 프록시 안내를 참고하세요.</span>
+      <span class="sync-note" id="syncNote">타래 첫 메시지에 적힌 작품명·작가명·레이블 등을 자동으로 읽어옵니다.</span>
     </div>
   </div>
 
@@ -210,8 +201,6 @@ function loadConfig(){
 }
 function saveConfig(){
   const cfg = {
-    tenantId: document.getElementById('tenantId').value,
-    clientId: document.getElementById('clientId').value,
     teamId: document.getElementById('teamId').value,
     channelId: document.getElementById('channelId').value,
     fetchCount: document.getElementById('fetchCount').value,
@@ -257,22 +246,70 @@ async function handleSync(){
   saveConfig();
   const pill = document.getElementById('teamsStatusPill');
   const note = document.getElementById('syncNote');
-  const tenant = document.getElementById('tenantId').value;
-  const client = document.getElementById('clientId').value;
-  if(!tenant || !client){
-    note.textContent = 'Tenant ID와 Client ID를 먼저 입력하세요.';
+  const teamId = document.getElementById('teamId').value.trim();
+  const channelId = document.getElementById('channelId').value.trim();
+  const top = document.getElementById('fetchCount').value || 50;
+
+  if(!teamId || !channelId){
+    note.textContent = 'Team ID와 Channel ID를 입력하세요.';
     return;
   }
-  pill.textContent = '연결 시도 중...';
+
+  pill.textContent = '불러오는 중...';
   pill.className = 'pill gray';
+  note.textContent = '';
+
   try{
-    // 실제 배포 시에는 이 부분을 서버리스 프록시(/api/teams-sync) 호출로 교체하세요.
-    // 브라우저에서 Client Secret으로 직접 Microsoft Graph를 호출하면 시크릿이 노출되고 CORS로 막힙니다.
-    throw new Error('직접 호출 불가 — 백엔드 프록시 필요');
+    const resp = await fetch('/api/teams-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teamId, channelId, top }),
+    });
+    const data = await resp.json();
+    if(!resp.ok){
+      pill.textContent = '연결 안됨';
+      pill.className = 'pill red';
+      note.textContent = (data && data.error) || '동기화에 실패했습니다.';
+      return;
+    }
+
+    let added = 0, updated = 0;
+    (data.threads || []).forEach(t => {
+      if(!t.title) return;
+      let it = items.find(i => i.teamsMessageId === t.messageId);
+      if(!it){
+        it = items.find(i => !i.teamsMessageId && i.title === t.title);
+      }
+      if(it){
+        it.teamsMessageId = t.messageId;
+        it.threadUrl = t.webUrl || it.threadUrl;
+        if(t.label) it.label = t.label;
+        if(t.kind || t.platform) it.kind = [t.kind, t.platform].filter(Boolean).join(' · ');
+        if(t.author) it.author = t.author;
+        if(t.hasThumbsUp) it.done = true;
+        updated++;
+      }else{
+        const id = items.length ? Math.max(...items.map(i=>i.id))+1 : 1;
+        items.push({
+          id, title: t.title, author: t.author || '', label: t.label || '',
+          kind: [t.kind, t.platform].filter(Boolean).join(' · '),
+          pubDate: '', threadUrl: t.webUrl || '', teamsMessageId: t.messageId,
+          biblio:false, manuscript:false, cover:false, produce:false,
+          registered:false, approving:false, done: !!t.hasThumbsUp,
+        });
+        added++;
+      }
+    });
+    saveItems();
+    render();
+
+    pill.textContent = '연결됨';
+    pill.className = 'pill green';
+    note.textContent = '새 타래 '+added+'건, 갱신 '+updated+'건 반영됨 · '+new Date(data.fetchedAt).toLocaleString('ko-KR');
   }catch(e){
     pill.textContent = '연결 안됨';
     pill.className = 'pill red';
-    note.textContent = '아직 백엔드 프록시가 없어 브라우저에서 직접 동기화할 수 없습니다. README를 참고하세요.';
+    note.textContent = '동기화 요청 중 오류가 발생했습니다: '+e.message;
   }
 }
 
@@ -373,8 +410,6 @@ function esc(s){
 
 (function init(){
   const cfg = loadConfig();
-  if(cfg.tenantId) document.getElementById('tenantId').value = cfg.tenantId;
-  if(cfg.clientId) document.getElementById('clientId').value = cfg.clientId;
   if(cfg.teamId) document.getElementById('teamId').value = cfg.teamId;
   if(cfg.channelId) document.getElementById('channelId').value = cfg.channelId;
   if(cfg.fetchCount) document.getElementById('fetchCount').value = cfg.fetchCount;
