@@ -34,20 +34,41 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const tenantId = process.env.TEAMS_TENANT_ID;
-  const clientId = process.env.TEAMS_CLIENT_ID;
-  const clientSecret = process.env.TEAMS_CLIENT_SECRET;
+  const tenantId = (process.env.TEAMS_TENANT_ID || '').trim();
+  const clientId = (process.env.TEAMS_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.TEAMS_CLIENT_SECRET || '').trim();
 
   if (!tenantId || !clientId || !clientSecret) {
     res.status(500).json({ error: '서버에 TEAMS_TENANT_ID / TEAMS_CLIENT_ID / TEAMS_CLIENT_SECRET 환경변수가 설정되어 있지 않습니다.' });
     return;
   }
 
-  const { teamId, channelId, top } = req.body || {};
-  if (!teamId || !channelId) {
+  if (req.body && req.body.debug === true) {
+    res.status(200).json({
+      debug: true,
+      tenantIdLength: tenantId.length,
+      clientIdLength: clientId.length,
+      clientSecretLength: clientSecret.length,
+      clientSecretFirst4: clientSecret.slice(0, 4),
+      clientSecretLast4: clientSecret.slice(-4),
+      clientSecretHasWhitespace: /\s/.test(process.env.TEAMS_CLIENT_SECRET || ''),
+    });
+    return;
+  }
+
+  const { teamId: rawTeamId, channelId: rawChannelId, top } = req.body || {};
+  if (!rawTeamId || !rawChannelId) {
     res.status(400).json({ error: 'teamId와 channelId를 입력하세요.' });
     return;
   }
+
+  function normalizeId(v) {
+    let s = String(v).trim();
+    try { s = decodeURIComponent(s); } catch (e) {}
+    return encodeURIComponent(s);
+  }
+  const teamId = normalizeId(rawTeamId);
+  const channelId = normalizeId(rawChannelId);
 
   try {
     const tokenRes = await fetch(
@@ -65,7 +86,7 @@ module.exports = async function handler(req, res) {
     );
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) {
-      res.status(502).json({ error: '토큰 발급 실패', detail: tokenData });
+      res.status(502).json({ error: '토큰 발급 실패: ' + (tokenData.error_description || tokenData.error || JSON.stringify(tokenData)) });
       return;
     }
 
@@ -75,7 +96,8 @@ module.exports = async function handler(req, res) {
     );
     const msgData = await msgRes.json();
     if (!msgRes.ok) {
-      res.status(502).json({ error: 'Teams 메시지 조회 실패', detail: msgData });
+      const msg = (msgData && msgData.error && msgData.error.message) || JSON.stringify(msgData);
+      res.status(502).json({ error: 'Teams 메시지 조회 실패: ' + msg });
       return;
     }
 
