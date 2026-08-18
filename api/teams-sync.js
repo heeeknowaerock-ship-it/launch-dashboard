@@ -17,6 +17,51 @@ const KNOWN_PLATFORMS = [
 
 const KNOWN_LABELS = ['에이블', '원티드', '비올렛', '라노체', '이브'];
 
+function normalizeDate(raw) {
+  if (!raw) return null;
+  let y, m, d;
+  let mo;
+  if ((mo = raw.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/))) {
+    y = +mo[1]; m = +mo[2]; d = +mo[3];
+  } else if ((mo = raw.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/))) {
+    m = +mo[1]; d = +mo[2];
+  } else if ((mo = raw.match(/(\d{1,2})[.\/](\d{1,2})(?!\d)/))) {
+    m = +mo[1]; d = +mo[2];
+  } else {
+    return null;
+  }
+  if (!y) {
+    const now = new Date();
+    y = now.getFullYear();
+    const candidate = new Date(y, m - 1, d);
+    if (candidate.getTime() < now.getTime() - 30 * 86400000) y += 1;
+  }
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(y, m - 1, d);
+  return dt.toISOString().slice(0, 10);
+}
+
+const DATE_PATTERN = /(\d{4}[-.\/]\d{1,2}[-.\/]\d{1,2})|(\d{1,2}\s*월\s*\d{1,2}\s*일)|(\d{1,2}[.\/]\d{1,2}(?!\d))/g;
+
+function extractDates(text) {
+  let match;
+  let dueRaw = null, pubRaw = null;
+  while ((match = DATE_PATTERN.exec(text)) !== null) {
+    const dateStr = match[0];
+    const contextStart = Math.max(0, match.index - 6);
+    const context = text.slice(contextStart, match.index);
+    if (/마감/.test(context)) {
+      if (!dueRaw) dueRaw = dateStr;
+    } else if (!pubRaw) {
+      pubRaw = dateStr;
+    }
+  }
+  return {
+    pubDate: normalizeDate(pubRaw),
+    dueDate: normalizeDate(dueRaw),
+  };
+}
+
 function parseLaunchFields(text) {
   const titleMatch = text.match(/<([^<>]+)>/);
   const title = titleMatch ? titleMatch[1].trim() : '';
@@ -44,8 +89,9 @@ function parseLaunchFields(text) {
   const authorAfter = platformIndex !== -1 ? after.slice(0, platformIndex).trim() : '';
 
   const author = authorBefore || authorAfter;
+  const dates = extractDates(text);
 
-  return { title, author, label, kind: '', platform };
+  return { title, author, label, kind: '', platform, pubDate: dates.pubDate, dueDate: dates.dueDate };
 }
 
 module.exports = async function handler(req, res) {
@@ -136,7 +182,8 @@ module.exports = async function handler(req, res) {
         label: fields.label || '',
         kind: fields.kind || '',
         platform: fields.platform || '',
-        pubDateRaw: fields.pubDateRaw || '',
+        pubDateRaw: fields.pubDate || '',
+        dueDateRaw: fields.dueDate || '',
         hasThumbsUp,
       };
     }).filter((t) => t.title || t.rawText);
