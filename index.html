@@ -125,6 +125,7 @@
   </div>
 
   <div class="summary" id="summary"></div>
+  <div id="presentationStats" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:20px;font-size:13px;color:var(--text-secondary);"></div>
 
   <div class="card">
     <div class="card-head">
@@ -314,6 +315,17 @@ async function handleSync(){
       }
     });
     saveItems();
+
+    const matchedThreads = (data.threads || []).filter(t => t.title);
+    const autoCheckedThreads = matchedThreads.filter(t => t.checks && Object.keys(t.checks).length > 0);
+    window.__presentationStats = {
+      totalMessagesFound: data.totalMessagesFound || 0,
+      matchedCount: matchedThreads.length,
+      autoCheckedCount: autoCheckedThreads.length,
+      syncedAt: data.fetchedAt,
+    };
+    localStorage.setItem('launch-dashboard-presentation-stats-v1', JSON.stringify(window.__presentationStats));
+
     render();
 
     pill.textContent = '연결됨';
@@ -332,6 +344,26 @@ function populateFilters(){
   const current = fLabel.value;
   const labels = ['전체', ...new Set(items.map(i=>i.label).filter(Boolean))];
   fLabel.innerHTML = labels.map(l=>'<option'+(l===current?' selected':'')+'>'+l+'</option>').join('');
+}
+
+function renderPresentationStats(overdueCount){
+  const box = document.getElementById('presentationStats');
+  let stats = window.__presentationStats;
+  if(!stats){
+    try{ stats = JSON.parse(localStorage.getItem('launch-dashboard-presentation-stats-v1') || 'null'); }catch(e){}
+  }
+  if(!stats || !stats.totalMessagesFound){
+    box.style.display = 'none';
+    return;
+  }
+  const recogPct = stats.totalMessagesFound ? Math.round(stats.matchedCount / stats.totalMessagesFound * 100) : 0;
+  const checkPct = stats.matchedCount ? Math.round(stats.autoCheckedCount / stats.matchedCount * 100) : 0;
+  box.style.display = 'block';
+  box.innerHTML =
+    '<div style="font-weight:600;color:var(--text-primary);margin-bottom:8px;">발표용 통계 (마지막 동기화 기준: '+new Date(stats.syncedAt).toLocaleString('ko-KR')+')</div>'+
+    '<div>· 자동 인식 커버리지: 전체 '+stats.totalMessagesFound+'건 중 '+stats.matchedCount+'건 자동 인식 ('+recogPct+'%)</div>'+
+    '<div>· 진행상태 자동 채움율: 인식된 '+stats.matchedCount+'건 중 '+stats.autoCheckedCount+'건은 답글에서 준비/마감 체크가 최소 1개 이상 자동 반영 ('+checkPct+'%)</div>'+
+    '<div>· 마감 임박 자동 감지: 현재 '+overdueCount+'건 (마감 3영업일 이내 미완료)</div>';
 }
 
 function render(){
@@ -358,6 +390,8 @@ function render(){
     ['표지 대기', coverWait],
     ['완료', doneCount],
   ].map(([l,v])=>'<div class="metric"><div class="label">'+l+'</div><div class="value">'+v+'</div></div>').join('');
+
+  renderPresentationStats(overdue);
 
   const rows = document.getElementById('rows');
   rows.innerHTML = '';
