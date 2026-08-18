@@ -94,6 +94,68 @@ function parseLaunchFields(text) {
   return { title, author, label, kind: '', platform, pubDate: dates.pubDate, dueDate: dates.dueDate };
 }
 
+const DONE_MARKERS = ['완료', '완입니다', '완료입니다', '완료됨', '됐습니다', '됐어요', '됨', '끝', 'ok', 'OK', '오케이', '컨펌'];
+const NEGATION_PATTERN = /아직|안\s*(됐|됨|끝|완료)|못\s*(했|함|끝)|미완료|아니요|아뇨|보류/;
+
+const CHECK_RULES = [
+  { field: 'biblio', keywords: ['서지정보', '서지'] },
+  { field: 'manuscript', keywords: ['원고', '완고'] },
+  { field: 'cover', keywords: ['표지'] },
+];
+
+function scanReplyForChecks(text) {
+  const result = {};
+  if (NEGATION_PATTERN.test(text)) return result;
+  for (const rule of CHECK_RULES) {
+    const hasKeyword = rule.keywords.some((kw) => text.includes(kw));
+    const hasDone = DONE_MARKERS.some((mk) => text.includes(mk));
+    if (hasKeyword && hasDone) result[rule.field] = true;
+  }
+  if (/등록\s*완료/.test(text) || (text.includes('등록') && DONE_MARKERS.some((mk) => text.includes(mk)) && !text.includes('마감'))) {
+    result.registered = true;
+  }
+  if (/승인\s*(대기|검토|확인)/.test(text)) {
+    result.approving = true;
+  }
+  return result;
+}
+
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let idx = 0;
+  async function worker() {
+    while (idx < items.length) {
+      const current = idx++;
+      results[current] = await fn(items[current], current);
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, worker);
+  await Promise.all(workers);
+  return results;
+}
+
+async function fetchRepliesChecks(teamId, channelId, messageId, accessToken) {
+  try {
+    const repRes = await fetch(
+      `https://graph.microsoft.com/v1.0/teams/${teamId}/channels/${channelId}/messages/${messageId}/replies?$top=50`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const repData = await repRes.json();
+    if (!repRes.ok) return { checks: {}, replyCount: 0, error: (repData && repData.error && repData.error.message) || 'unknown' };
+
+    const merged = {};
+    const replies = repData.value || [];
+    for (const r of replies) {
+      const text = stripHtml(r.body && r.body.content);
+      if (!text) continue;
+      Object.assign(merged, scanReplyForChecks(text));
+    }
+    return { checks: merged, replyCount: replies.length };
+  } catch (err) {
+    return { checks: {}, replyCount: 0, error: String(err) };
+  }
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'POST만 지원합니다.' });
@@ -188,10 +250,19 @@ module.exports = async function handler(req, res) {
       };
     }).filter((t) => t.title || t.rawText);
 
+    // 답글에서 준비 체크(서지/원고/표지) 및 마감 체크(등록완료/승인대기) 자동 인식 — 실제 작품 타래(title 있는 것)만 조회
+    const launchThreads = threads.filter((t) => t.title);
+    await mapLimit(launchThreads, 5, async (t) => {
+      const { checks, replyCount } = await fetchRepliesChecks(teamId, channelId, t.messageId, tokenData.access_token);
+      t.checks = checks;
+      t.replyCount = replyCount;
+    });
+
     res.status(200).json({
       threads,
       fetchedAt: new Date().toISOString(),
       totalMessagesFound: (msgData.value || []).length,
+      threadsWithRepliesScanned: launchThreads.length,
       sampleRawTexts: (msgData.value || []).slice(0, 3).map((m) => stripHtml(m.body && m.body.content).slice(0, 300)),
     });
   } catch (err) {
