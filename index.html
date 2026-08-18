@@ -186,6 +186,11 @@ function bizDaysBetween(a,b){
   return c;
 }
 function fmt(d){ return d.toISOString().slice(0,10); }
+function getDueDate(it){
+  if(it.dueOverride) return new Date(it.dueOverride);
+  if(it.pubDate) return addBizDays(new Date(it.pubDate), -7);
+  return null;
+}
 
 function loadItems(){
   try{
@@ -286,6 +291,8 @@ async function handleSync(){
         if(t.label) it.label = t.label;
         if(t.kind || t.platform) it.kind = [t.kind, t.platform].filter(Boolean).join(' · ');
         if(t.author) it.author = t.author;
+        if(t.pubDateRaw && !it.pubDate) it.pubDate = t.pubDateRaw;
+        if(t.dueDateRaw) it.dueOverride = t.dueDateRaw;
         if(t.hasThumbsUp) it.done = true;
         updated++;
       }else{
@@ -293,7 +300,7 @@ async function handleSync(){
         items.push({
           id, title: t.title, author: t.author || '', label: t.label || '',
           kind: [t.kind, t.platform].filter(Boolean).join(' · '),
-          pubDate: '', threadUrl: t.webUrl || '', teamsMessageId: t.messageId,
+          pubDate: t.pubDateRaw || '', dueOverride: t.dueDateRaw || '', threadUrl: t.webUrl || '', teamsMessageId: t.messageId,
           biblio:false, manuscript:false, cover:false, produce:false,
           registered:false, approving:false, done: !!t.hasThumbsUp,
         });
@@ -332,8 +339,8 @@ function render(){
     if(!it.manuscript) manuscriptWait++;
     if(!it.cover) coverWait++;
     if(it.done) doneCount++;
-    if(it.pubDate){
-      const due = addBizDays(new Date(it.pubDate), -7);
+    const due = getDueDate(it);
+    if(due){
       const remain = bizDaysBetween(new Date(), due);
       if(remain<=3 && !it.done) overdue++;
     }
@@ -352,7 +359,7 @@ function render(){
     if(fLabel!=='전체' && it.label!==fLabel) return false;
     if(fSearch && !(it.title.toLowerCase().includes(fSearch) || it.author.toLowerCase().includes(fSearch))) return false;
     if(fStatus!=='전체'){
-      const due = it.pubDate ? addBizDays(new Date(it.pubDate), -7) : null;
+      const due = getDueDate(it);
       const remain = due ? bizDaysBetween(new Date(), due) : null;
       if(fStatus==='완료' && !it.done) return false;
       if(fStatus==='미완료' && it.done) return false;
@@ -361,7 +368,7 @@ function render(){
     return true;
   }).forEach(it=>{
     const st = stage(it);
-    const due = it.pubDate ? addBizDays(new Date(it.pubDate), -7) : null;
+    const due = getDueDate(it);
     const remain = due ? bizDaysBetween(new Date(), due) : null;
     const remind = remain!==null && remain<=3 && !it.done;
     const tr = document.createElement('tr');
@@ -377,7 +384,7 @@ function render(){
       '</td>'+
       '<td data-label="일정" class="date-cell">'+
         '<input type="date" value="'+it.pubDate+'" onchange="updateField('+it.id+',&quot;pubDate&quot;,this.value)">'+
-        (due ? '<div class="meta">마감 '+fmt(due)+' · <span class="remain'+(remain<0?' danger':'')+'">D'+(remain>=0?'-'+remain:'+'+Math.abs(remain))+'</span></div>' : '<div class="meta">일정 미확정</div>')+
+        (due ? '<div class="meta">마감 '+fmt(due)+(it.dueOverride?' (명시)':' (자동)')+' · <span class="remain'+(remain<0?' danger':'')+'">D'+(remain>=0?'-'+remain:'+'+Math.abs(remain))+'</span></div>' : '<div class="meta">일정 미확정</div>')+
       '</td>'+
       '<td data-label="현재 단계"><div class="stage-wrap">'+
         '<span class="pill '+colorClass(st.cls)+'">'+st.label+'</span>'+
