@@ -4,28 +4,48 @@ function stripHtml(html) {
     .replace(/<\/p>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
     .trim();
 }
 
-function extractField(text, labels) {
-  for (const label of labels) {
-    const re = new RegExp(label + '\\s*[:：]\\s*(.+)', 'i');
-    const m = text.match(re);
-    if (m) return m[1].trim();
-  }
-  return '';
-}
+const KNOWN_PLATFORMS = [
+  '네이버 시리즈', '카카오페이지', '카카오웹툰', '원스토어', '미스터블루',
+  '봄툰', '리디북스', '리디', '조아라', '문피아', '시리즈', '톡소다', '북팔',
+];
+
+const KNOWN_LABELS = ['에이블', '원티드', '비올렛', '라노체', '이브'];
 
 function parseLaunchFields(text) {
-  return {
-    title: extractField(text, ['작품명']),
-    author: extractField(text, ['작가명']),
-    label: extractField(text, ['레이블 태그', '레이블']),
-    kind: extractField(text, ['구분\\(연재/단행\\)', '구분']),
-    platform: extractField(text, ['출간 플랫폼', '플랫폼']),
-    pubDateRaw: extractField(text, ['출간 일정', '출간일']),
-  };
+  const titleMatch = text.match(/<([^<>]+)>/);
+  const title = titleMatch ? titleMatch[1].trim() : '';
+
+  const before = titleMatch ? text.slice(0, titleMatch.index) : '';
+  const after = titleMatch ? text.slice(titleMatch.index + titleMatch[0].length) : '';
+
+  const beforeTokens = before.trim().split(/\s+/).filter(Boolean);
+
+  let label = '';
+  let authorBefore = '';
+  if (beforeTokens.length && KNOWN_LABELS.includes(beforeTokens[0])) {
+    label = beforeTokens[0];
+    authorBefore = beforeTokens.slice(1).join(' ');
+  } else {
+    authorBefore = beforeTokens.join(' ');
+  }
+
+  let platform = '';
+  let platformIndex = -1;
+  for (const p of KNOWN_PLATFORMS) {
+    const idx = after.indexOf(p);
+    if (idx !== -1) { platform = p; platformIndex = idx; break; }
+  }
+  const authorAfter = platformIndex !== -1 ? after.slice(0, platformIndex).trim() : '';
+
+  const author = authorBefore || authorAfter;
+
+  return { title, author, label, kind: '', platform };
 }
 
 module.exports = async function handler(req, res) {
