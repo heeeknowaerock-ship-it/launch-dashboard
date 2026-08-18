@@ -294,15 +294,21 @@ async function handleSync(){
         if(t.pubDateRaw && !it.pubDate) it.pubDate = t.pubDateRaw;
         if(t.dueDateRaw) it.dueOverride = t.dueDateRaw;
         if(t.hasThumbsUp) it.done = true;
+        if(t.checks){
+          ['biblio','manuscript','cover','registered','approving'].forEach(f=>{
+            if(t.checks[f]) it[f] = true;
+          });
+        }
         updated++;
       }else{
         const id = items.length ? Math.max(...items.map(i=>i.id))+1 : 1;
+        const checks = t.checks || {};
         items.push({
           id, title: t.title, author: t.author || '', label: t.label || '',
           kind: [t.kind, t.platform].filter(Boolean).join(' · '),
           pubDate: t.pubDateRaw || '', dueOverride: t.dueDateRaw || '', threadUrl: t.webUrl || '', teamsMessageId: t.messageId,
-          biblio:false, manuscript:false, cover:false, produce:false,
-          registered:false, approving:false, done: !!t.hasThumbsUp,
+          biblio: !!checks.biblio, manuscript: !!checks.manuscript, cover: !!checks.cover, produce:false,
+          registered: !!checks.registered, approving: !!checks.approving, done: !!t.hasThumbsUp,
         });
         added++;
       }
@@ -312,7 +318,7 @@ async function handleSync(){
 
     pill.textContent = '연결됨';
     pill.className = 'pill green';
-    note.textContent = '새 타래 '+added+'건, 갱신 '+updated+'건 반영됨 · 전체 메시지 '+(data.totalMessagesFound||0)+'건 · '+new Date(data.fetchedAt).toLocaleString('ko-KR');
+    note.textContent = '새 타래 '+added+'건, 갱신 '+updated+'건 반영됨 · 답글 스캔 '+(data.threadsWithRepliesScanned||0)+'건 · '+new Date(data.fetchedAt).toLocaleString('ko-KR');
     console.log('teams-sync 진단 정보:', data);
   }catch(e){
     pill.textContent = '연결 안됨';
