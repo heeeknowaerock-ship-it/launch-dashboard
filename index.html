@@ -305,7 +305,8 @@ async function handleSync(){
 
     pill.textContent = '연결됨';
     pill.className = 'pill green';
-    note.textContent = '새 타래 '+added+'건, 갱신 '+updated+'건 반영됨 · '+new Date(data.fetchedAt).toLocaleString('ko-KR');
+    note.textContent = '새 타래 '+added+'건, 갱신 '+updated+'건 반영됨 · 전체 메시지 '+(data.totalMessagesFound||0)+'건 · '+new Date(data.fetchedAt).toLocaleString('ko-KR');
+    console.log('teams-sync 진단 정보:', data);
   }catch(e){
     pill.textContent = '연결 안됨';
     pill.className = 'pill red';
