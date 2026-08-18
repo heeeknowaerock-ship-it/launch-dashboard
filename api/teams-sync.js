@@ -121,7 +121,12 @@ module.exports = async function handler(req, res) {
       };
     }).filter((t) => t.title || t.rawText);
 
-    res.status(200).json({ threads, fetchedAt: new Date().toISOString() });
+    res.status(200).json({
+      threads,
+      fetchedAt: new Date().toISOString(),
+      totalMessagesFound: (msgData.value || []).length,
+      sampleRawTexts: (msgData.value || []).slice(0, 3).map((m) => stripHtml(m.body && m.body.content).slice(0, 300)),
+    });
   } catch (err) {
     res.status(500).json({ error: '동기화 중 오류가 발생했습니다.', detail: String(err) });
   }
